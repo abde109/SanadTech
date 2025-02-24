@@ -11,7 +11,7 @@ This project is designed to efficiently manage and display an extensive user lis
 
 ## 🎥 Demo
 
-<iframe src="https://player.vimeo.com/video/1059872876" width="640" height="360" frameborder="0" allowfullscreen></iframe>
+[![Watch the Demo](https://img.shields.io/badge/Watch%20Demo-Click%20Here-blue?style=for-the-badge)](https://vimeo.com/1059872876)
 
 ---
 
