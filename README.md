@@ -92,7 +92,7 @@ The `GenericData<T>` class provides a scalable way to manage any type of structu
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/yourusername/SanadTech.git
+   git clone https://github.com/abde109/SanadTech.git
    cd SanadTech
    ```
 
