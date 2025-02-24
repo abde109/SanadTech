@@ -1,0 +1,17 @@
+{
+  "private": true,
+  "name": "sanadtech",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter Back run dev\" \"pnpm --filter Front run dev\"",
+    "build": "pnpm --filter Back run build && pnpm --filter Front run build",
+    "start": "pnpm --filter Back run start && pnpm --filter Front run preview"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  },
+  "workspaces": [
+    "Back",
+    "Front"
+  ]
+}
