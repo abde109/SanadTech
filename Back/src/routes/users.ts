@@ -1,7 +1,7 @@
-// src/routes/users.ts
+// backend/routes/users.ts
 import { Request, Response, Router } from "express";
 import { readFileSync } from "fs";
-import { GenericData } from "../services/dataStorage";
+import { GenericData } from "../services/GenericData";
 
 interface User {
   id: number;
@@ -9,39 +9,45 @@ interface User {
   nom: string;
 }
 
-// Load your users from the JSON file.
-const users: User[] = JSON.parse(readFileSync("src/storage/users.json", "utf-8"));
-
-// Create a GenericData instance using a key that concatenates prenom, nom, and id.
-const userData = new GenericData<User>(users,user => user.prenom + user.nom + user.id);
+const rawUsers: User[] = JSON.parse(readFileSync("src/storage/users.json", "utf-8"));
+const userData = new GenericData<User>(rawUsers, (user) =>
+  user.prenom + user.nom + user.id
+);
 
 const router = Router();
 
 /**
- * GET /users/search-lazy
+ * GET /users/lazy
+ * Return a slice [offset, offset+limit] from the big alphabetical list.
  * 
- * - If query parameter 'alphabet' is "true", only return users whose key starts with the query.
- * - Otherwise, perform a partial (includes) search.
- * - Finally, sort the resulting data by user.id before returning.
- *
- * Example: /users/search-lazy?q=A&alphabet=true
+ * Query Params:
+ *  - offset: number (index to start from)
+ *  - limit:  number (how many items to return)
  */
-router.get("/search-lazy", (req: Request, res: Response) => {
-  const q = req.query.q as string;
-  const alphabet = req.query.alphabet === "true";
+router.get("/lazy", (req: Request, res: Response) => {
   const offset = parseInt(req.query.offset as string, 10) || 0;
   const limit = parseInt(req.query.limit as string, 10) || 20;
 
-  // Decide whether to lazy-load everything or search, then slice.
-  let results = !q
-    ? userData.lazyLoad(offset, limit)
-    : userData.searchLazy(q, offset, limit, alphabet);
-
+  const { total, data } = userData.lazyLoad(offset, limit);
 
   res.json({
-    total: results.total,
-    data: results.data,
+    total,
+    data
   });
+});
+
+/**
+ * GET /users/position
+ * Return { index: number } indicating where a given letter starts
+ * in the fully-sorted list.
+ *
+ * Example: /users/position?q=F  => { index: 14 }
+ */
+
+router.get("/position", (req: Request, res: Response) => {
+  const letter = (req.query.q as string) || "";
+  const index = userData.getIndexForLetter(letter);
+  res.json({ index });
 });
 
 export default router;

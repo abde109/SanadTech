@@ -1,88 +1,98 @@
-// src/App.tsx
-import { useEffect, useState } from 'react';
-import InfiniteScroll from 'react-infinite-scroll-component';
-import AlphabetSidebar from './components/AlphabetSidebar';
-import EndMessage from './components/EndMessage';
-import Loader from './components/Loader';
-import SearchBar from './components/SearchBar';
-import UserListItem from './components/UserListItem';
-import { User } from './models/userModel';
-import { useSearchUsers } from './utils/useSearchUsers';
+import { useCallback, useEffect, useRef, useState } from "react";
+import InfiniteScroll from "react-infinite-scroll-component";
+import AlphabetSidebar from "./components/AlphabetSidebar";
+import EndMessage from "./components/EndMessage";
+import Loader from "./components/Loader";
+import UserListItem from "./components/UserListItem";
+import { User } from "./models/userModel";
+import { useLazyFetch } from "./utils/useLazyFetch";
+import { useLetterPosition } from "./utils/useLetterPosition";
 
 function App() {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [total, setTotal] = useState<number>(0);
-  const [offset, setOffset] = useState(0);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [alphabetMode, setAlphabetMode] = useState<boolean>(false);
+  const [total, setTotal] = useState(0);
+  const [topOffset, setTopOffset] = useState(0);
+  const [downCount, setDownCount] = useState(0);
+  const [selectedLetter, setSelectedLetter] = useState("A");
   const limit = 20;
+  const { getLetterIndex } = useLetterPosition();
+  const { getSlice } = useLazyFetch();
 
-  // Custom hook to fetch users (with or without "alphabetMode").
-  const { getSearchUsers } = useSearchUsers(searchQuery, offset, limit, alphabetMode);
 
-  const fetchUsers = async () => {
-    try {
-      const result = await getSearchUsers();
-      setUsers(prev => [...prev, ...result.data]);
-      setTotal(result.total);
-      setOffset(prev => prev + limit);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-    }
+  const fetchDown = useCallback(async () => {
+    const offset = topOffset + downCount;
+    const { data, total } = await getSlice(offset, limit);
+    setUsers((prev) => [...prev, ...data]);
+    setDownCount((prev) => prev + data.length);
+    setTotal(total);
+  }, [topOffset, downCount, getSlice]);
+
+  const fetchUp = async () => {
+    if (topOffset - limit <= 0) return;
+    if (!scrollRef.current) return;
+    const before = scrollRef.current.scrollHeight;
+    const { data, total } = await getSlice(topOffset - limit, limit);
+    setUsers((prev) => [...data, ...prev]);
+    setTopOffset(topOffset - limit);
+    setTotal(total);
+    requestAnimationFrame(() => {
+      if (scrollRef.current)
+        scrollRef.current.scrollBy(0, scrollRef.current.scrollHeight - before);
+    });
   };
 
-  // Reset data on query/mode changes
   useEffect(() => {
-    setUsers([]);
-    setOffset(0);
-    setTotal(0);
-    fetchUsers();
-  }, [searchQuery, alphabetMode]);
+    fetchDown();
+  }, []);
 
-  // Strict "startsWith" mode for sidebar selection
-  const handleLetterSelect = (letter: string) => {
-    setAlphabetMode(true);
-    setSearchQuery(letter);
+  const jumpToLetter = async (letter: string) => {
+    setSelectedLetter(letter);
+    const idx = await getLetterIndex(letter);
+    setUsers([]);
+    setTopOffset(idx);
+    setDownCount(0);
+    scrollRef.current?.scrollTo({ top: 5 });
+    const { data, total } = await getSlice(idx, limit);
+    setUsers(data);
+    setTotal(total);
   };
 
-  // "includes" mode for typed queries
-  const handleSearchChange = (query: string) => {
-    setAlphabetMode(false);
-    setSearchQuery(query);
+  const handleScroll = () => {
+    if (!scrollRef.current || !listRef.current) return;
+    if (scrollRef.current.scrollTop <= 0) fetchUp();
+    const containerTop = scrollRef.current.getBoundingClientRect().top;
+    const firstVisible = Array.from(listRef.current.children).find(
+      (el) => el.getBoundingClientRect().top >= containerTop
+    );
+    if (firstVisible)
+      setSelectedLetter(firstVisible.textContent?.trim()[0]?.toUpperCase() || "");
   };
 
   return (
     <div className="relative min-h-screen bg-gradient-to-tr from-white to-gray-100 text-gray-800">
-      <AlphabetSidebar
-        onSelectLetter={handleLetterSelect}
-        selectedLetter={alphabetMode ? searchQuery : ''}
-      />
-
+      <AlphabetSidebar onSelectLetter={jumpToLetter} selectedLetter={selectedLetter} />
       <div className="pl-16 sm:pl-20 pr-5 py-5 max-w-5xl mx-auto">
         <div className="bg-white/70 rounded-xl shadow-md p-6">
-          <h1 className="text-5xl font-semibold text-center">
-            User List
-          </h1>
-          
-          {/* Sticky SearchBar */}
-          <div className="sticky top-0 z-10 mb-6 backdrop-blur-md rounded-lg shadow p-6">
-            <SearchBar searchQuery={searchQuery} setSearchQuery={handleSearchChange} />
-            <p className='font-semibold text-gray-700'>total: {total}</p>
+          <h1 className="text-4xl font-semibold text-center">User List</h1>
+          <div id="scrollableDiv" ref={scrollRef} onScroll={handleScroll} style={{ height: "83vh", overflowY: "auto" }}>
+            <InfiniteScroll
+              key={selectedLetter}
+              dataLength={users.length}
+              next={fetchDown}
+              hasMore={topOffset + downCount < total}
+              loader={<Loader />}
+              endMessage={<EndMessage />}
+              scrollableTarget="scrollableDiv"
+            >
+              <ul ref={listRef} className="list-none p-0">
+                {users.map((user) => (
+                  <UserListItem key={user.id} user={user} />
+                ))}
+              </ul>
+            </InfiniteScroll>
           </div>
-
-          <InfiniteScroll
-            dataLength={users.length}
-            next={fetchUsers}
-            hasMore={users.length < total}
-            loader={<Loader />}
-            endMessage={<EndMessage />}
-          >
-            <ul className="list-none p-0">
-              {users.map(user => (
-                <UserListItem key={user.id} user={user} />
-              ))}
-            </ul>
-          </InfiniteScroll>
         </div>
       </div>
     </div>
